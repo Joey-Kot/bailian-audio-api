@@ -18,6 +18,7 @@ API_SEGMENT_LENGTH="175"
 
 FFMPEG_SEGMENT_LENGTH="5"
 FFMPEG_WORKS="16"
+SKIP_TRIM="false"
 SEGMENT_WORKERS="0"
 LIBAV_CODEC_THREADS="0"
 SILENT_INTERVAL="700"
@@ -33,7 +34,7 @@ ASR_RETRY_FACTOR="2.0"
 ASR_RETRY_MAX_DELAY="8.0"
 ```
 
-端到端耗时取 `curl` 输出的总耗时；预处理耗时从服务收到请求到输出 `segments merged_duration` 日志计算，按秒取整。裁剪率为裁剪掉的时长占原始时长的比例；端到端倍速为原始时长除以端到端耗时，裁剪后倍速为裁剪后音频时长除以端到端耗时。
+性能测试均使用 `SKIP_TRIM=false`。端到端耗时取 `curl` 输出的总耗时；预处理耗时从服务收到请求到输出 `segments merged_duration` 日志计算，按秒取整。裁剪率为裁剪掉的时长占原始时长的比例；端到端倍速为原始时长除以端到端耗时，裁剪后倍速为裁剪后音频时长除以端到端耗时。
 
 | 指标 | 《钢铁侠 1》英语 | 《你的名字》日语 | 《让子弹飞》中文 |
 |---|---:|---:|---:|
@@ -53,7 +54,7 @@ ASR_RETRY_MAX_DELAY="8.0"
 
 - 兼容 `POST /v1/audio/transcriptions`
 - 支持 Bearer Token 鉴权，`API_TOKEN` 可用逗号配置多个 token
-- 预处理链路：转 WAV、固定分片并发静音裁剪、合并、按静音区间并发导出和编码 ASR 分片
+- 预处理链路：默认转 WAV、固定分片并发静音裁剪、合并、按静音区间并发导出和编码 ASR 分片；`SKIP_TRIM=true` 时，统一转 WAV 后直接按静音区间分片
 - 默认复刻 DashScope Python SDK 的临时 OSS 流程，也支持自建 WebDAV 作为分片存储
 - 支持 Qwen3-ASR-Flash、Fun-ASR-Flash、Fun-ASR、Paraformer 系列非实时模型，模型名原样透传给 DashScope
 - 支持非流式 JSON 返回，也支持 `stream=true` 的伪 SSE 流式返回
@@ -131,6 +132,7 @@ API_CONCURRENCY="10"
 API_SEGMENT_LENGTH="175"
 FFMPEG_WORKS="16"
 FFMPEG_SEGMENT_LENGTH="5"
+SKIP_TRIM="false"
 SEGMENT_WORKERS="0"
 LIBAV_CODEC_THREADS="0"
 SILENT_INTERVAL="700"
@@ -152,6 +154,7 @@ ASR_RETRY_MAX_DELAY="8.0"
 
 ASR 分片会显式输出为 `ogg` 容器、`libopus` 编码、`16000Hz`、`s16` 采样格式；`OUTPUT_BITRATE` / `--output-bitrate` 控制 Opus 码率，默认 `128k`。
 `SEGMENT_WORKERS` / `--segment-workers` 控制 ASR 分片导出和编码并发数，`0` 表示由预处理库按 CPU 自动选择；`LIBAV_CODEC_THREADS` / `--libav-codec-threads` 控制每条 libav pipeline 的 decoder/encoder 线程数，`0` 表示使用 libav 默认策略。显式调大时需要同时考虑 `FFMPEG_WORKS`，避免 Go worker 和 libav codec 线程叠加后过量并发。
+`SKIP_TRIM` / `--skip-trim` 默认为 `false`。设置为 `true`（也可使用 `1`）时，跳过固定切片静音裁剪和合并，统一转 WAV 后直接调用预处理库完成静音区间分片。
 `ENABLE_LID` 和 `ENABLE_ITN` 分别控制请求未显式传入 `enable_lid`、`enable_itn` 时的默认值；请求字段一旦传入，会覆盖服务配置默认值。
 生产部署建议用环境变量传入 `API_TOKEN` 和 `DASHSCOPE_API_KEY`，避免密钥出现在进程命令行里；本地测试也可以使用 `--api-token` 和 `--dashscope-api-key`。
 
@@ -184,6 +187,7 @@ go build -tags libav -trimpath -ldflags="-s -w -linkmode external -extldflags '-
   --api-segment-length 175s \
   --fixed-slice-length 5s \
   --fixed-slice-workers 16 \
+  --skip-trim 0 \
   --segment-workers 0 \
   --libav-codec-threads 0 \
   --silent-interval 700ms \
@@ -205,6 +209,7 @@ DASHSCOPE_API_KEY="sk-xxx" \
 WEBDAV_URL="https://files.example.com/dav/asr" \
 WEBDAV_CREDENTIALS="user@password" \
 OUTPUT_BITRATE="128k" \
+SKIP_TRIM="false" \
 ENABLE_LID="true" \
 ENABLE_ITN="false" \
 ./qwen-stt-compatible \
@@ -245,6 +250,7 @@ ENABLE_ITN="false" \
 | `--api-segment-length` | `175s` | `API_SEGMENT_LENGTH` | 单个 ASR 分片最大时长 |
 | `--fixed-slice-length` | `5s` | `FFMPEG_SEGMENT_LENGTH` | 固定分片静音裁剪的切片长度 |
 | `--fixed-slice-workers` | `16` | `FFMPEG_WORKS` | 固定分片静音裁剪并发数 |
+| `--skip-trim` | `false` | `SKIP_TRIM` | 跳过固定分片静音裁剪和合并，统一转码后直接按静音区间分片；支持 `0/1` 或 `true/false` |
 | `--segment-workers` | `0` | `SEGMENT_WORKERS` | ASR 分片导出和编码并发数，`0` 表示按 CPU 自动选择 |
 | `--libav-codec-threads` | `0` | `LIBAV_CODEC_THREADS` | 单个 libav pipeline 的 decoder/encoder 线程数，`0` 表示 libav 默认策略 |
 | `--silent-interval` | `700ms` | `SILENT_INTERVAL` | 最短静音判定时长 |
@@ -277,16 +283,22 @@ Release packages include the executable, `README.md`, `LICENSE`, `NOTICE`,
 request=<request_id> endpoint=/v1/audio/transcriptions file=<filename> model=<model> language=<language> enable_lid=<bool> enable_itn=<bool>
 ```
 
-固定切片静音裁剪成功时会输出：
+默认模式（`SKIP_TRIM=false`）的固定切片静音裁剪成功时会输出：
 
 ```text
 fixed trim input_duration=<音频文件原始长度> fixed_slice_length=<固定切片长度> slices=<成功切片数量> trimmed_slices=<检测到静音并进行了裁剪的切片数量>
 ```
 
-生成 ASR 分片后会输出：
+默认模式生成 ASR 分片后会输出：
 
 ```text
 segments merged_duration=<切片合并后音频长度> asr_segments=<并发 ASR 分片数量>
+```
+
+`SKIP_TRIM=true` 时不会输出固定裁剪日志，直接分片后会输出：
+
+```text
+segments skip_trim=true input_duration=<统一转码后音频长度> asr_segments=<并发 ASR 分片数量>
 ```
 
 ## Docker
@@ -309,6 +321,7 @@ docker run -d \
   -e API_SEGMENT_LENGTH="175" \
   -e FFMPEG_WORKS="16" \
   -e FFMPEG_SEGMENT_LENGTH="5" \
+  -e SKIP_TRIM="false" \
   -e SEGMENT_WORKERS="0" \
   -e LIBAV_CODEC_THREADS="0" \
   -e SILENT_INTERVAL="700" \

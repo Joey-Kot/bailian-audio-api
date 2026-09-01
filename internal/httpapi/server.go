@@ -224,6 +224,14 @@ func (s *Server) preprocess(ctx context.Context, inputPath, tempDir string, samp
 	if err != nil {
 		return nil, err
 	}
+	if s.cfg.SkipTrim {
+		segments, splitInfo, err := processor.SplitWAVBySilenceGroups(ctx, wavPath)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("segments skip_trim=true input_duration=%s asr_segments=%d", splitInfo.InputDuration, splitInfo.SegmentCount)
+		return segments, nil
+	}
 	mergedWAV := filepath.Join(tempDir, "converted_sliced_merged.wav")
 	merged, trimInfo, err := processor.RemoveSilenceByFixedSlicesAndMerge(ctx, wavPath, mergedWAV)
 	if err != nil {

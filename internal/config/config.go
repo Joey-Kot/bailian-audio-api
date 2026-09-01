@@ -41,6 +41,7 @@ type Config struct {
 	APISegmentLength  time.Duration
 	FixedSliceLength  time.Duration
 	FixedSliceWorkers int
+	SkipTrim          bool
 	SegmentWorkers    int
 	LibavCodecThreads int
 	SilentInterval    time.Duration
@@ -68,6 +69,7 @@ func Parse(args []string) (Config, error) {
 		APISegmentLength:  time.Duration(envPositiveInt("API_SEGMENT_LENGTH", 175)) * time.Second,
 		FixedSliceLength:  time.Duration(envPositiveInt("FFMPEG_SEGMENT_LENGTH", 5)) * time.Second,
 		FixedSliceWorkers: envPositiveInt("FFMPEG_WORKS", 16),
+		SkipTrim:          envBool("SKIP_TRIM", false),
 		SegmentWorkers:    envNonNegativeInt("SEGMENT_WORKERS", 0),
 		LibavCodecThreads: envNonNegativeInt("LIBAV_CODEC_THREADS", 0),
 		SilentInterval:    time.Duration(envPositiveInt("SILENT_INTERVAL", 700)) * time.Millisecond,
@@ -105,6 +107,7 @@ func Parse(args []string) (Config, error) {
 	fs.DurationVar(&cfg.APISegmentLength, "api-segment-length", cfg.APISegmentLength, "maximum ASR segment length")
 	fs.DurationVar(&cfg.FixedSliceLength, "fixed-slice-length", cfg.FixedSliceLength, "fixed trim slice length")
 	fs.IntVar(&cfg.FixedSliceWorkers, "fixed-slice-workers", cfg.FixedSliceWorkers, "fixed trim workers")
+	fs.Var(boolValue{target: &cfg.SkipTrim}, "skip-trim", "skip fixed-slice silence trim, accepts 0/1 or true/false")
 	fs.IntVar(&cfg.SegmentWorkers, "segment-workers", cfg.SegmentWorkers, "ASR segment export and encode workers, 0 means auto")
 	fs.IntVar(&cfg.LibavCodecThreads, "libav-codec-threads", cfg.LibavCodecThreads, "libav decoder/encoder threads per pipeline, 0 means libav default")
 	fs.DurationVar(&cfg.SilentInterval, "silent-interval", cfg.SilentInterval, "minimum silence interval")

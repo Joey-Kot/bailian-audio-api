@@ -122,6 +122,34 @@ func TestParsePreprocessConcurrencyAllowsZeroAuto(t *testing.T) {
 	}
 }
 
+func TestParseSkipTrimDefaultsFromEnvAndFlag(t *testing.T) {
+	t.Setenv("SKIP_TRIM", "")
+	cfg, err := Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SkipTrim {
+		t.Fatal("SkipTrim=true want false")
+	}
+
+	t.Setenv("SKIP_TRIM", "true")
+	cfg, err = Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SkipTrim {
+		t.Fatal("SkipTrim=false want true")
+	}
+
+	cfg, err = Parse([]string{"--skip-trim", "false"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SkipTrim {
+		t.Fatal("SkipTrim=true want false")
+	}
+}
+
 func TestParseEnableDefaultsFromEnvAndFlags(t *testing.T) {
 	t.Setenv("ENABLE_LID", "false")
 	t.Setenv("ENABLE_ITN", "true")
